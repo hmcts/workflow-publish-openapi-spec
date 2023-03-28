@@ -1,0 +1,44 @@
+name: Publish OpenAPI Spec
+
+on:
+  workflow_call:
+    inputs:
+      test_to_run:
+        required: true
+        type: string
+        description: The full path to the test to run, e.g. uk.gov.hmcts.reform.myapp.openapi.OpenAPIPublisherTest
+      java_version:
+        required: true
+        type: string
+    secrets:
+      SWAGGER_PUBLISHER_API_TOKEN:
+        required: true
+        description: GitHub API token that can publish to the cnp-api-docs repository
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK ${{ inputs.java_version }}
+        uses: actions/setup-java@v3
+        with:
+          java-version: ${{ inputs.java_version }}
+          distribution: 'temurin'
+          cache: 'gradle'
+      - name: Run OpenAPI Publisher
+        run: ./gradlew integration --tests ${{ inputs.test_to_run }}
+      - name: Commit to repository
+        run: |
+          mkdir openapi-staging
+          cd openapi-staging
+          git init
+          git config user.email "github-platform-operations@HMCTS.NET"
+          git config user.name "HMCTS Platform Operations"
+          git remote add upstream https://apitoken:${{ secrets.SWAGGER_PUBLISHER_API_TOKEN }}@github.com/hmcts/cnp-api-docs.git
+          git pull upstream master
+          repo=`echo "$GITHUB_REPOSITORY" | cut -f2- -d/`
+          echo "$(cat /tmp/openapi-specs.json)" > "docs/specs/$repo.json"
+          git add "docs/specs/$repo.json"
+          # Only commit and push if we have changes
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update spec for $repo#${GITHUB_SHA:7}"; git push --set-upstream upstream master)
