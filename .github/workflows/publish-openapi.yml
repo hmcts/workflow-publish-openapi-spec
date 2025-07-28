@@ -10,6 +10,11 @@ on:
       java_version:
         required: true
         type: string
+      api_name:
+        required: false
+        type: string
+        description: The name of the API, used for naming the output file. Defaults to repo name. 
+         | Must be unique across all APIs.
     secrets:
       SWAGGER_PUBLISHER_API_TOKEN:
         required: true
@@ -38,7 +43,11 @@ jobs:
           git remote add upstream https://apitoken:${{ secrets.SWAGGER_PUBLISHER_API_TOKEN }}@github.com/hmcts/cnp-api-docs.git
           git pull upstream master
           repo=`echo "$GITHUB_REPOSITORY" | cut -f2- -d/`
-          echo "$(cat /tmp/openapi-specs.json)" > "docs/specs/$repo.json"
-          git add "docs/specs/$repo.json"
+          api_name="${{ inputs.api_name }}"
+          if [ -z "$api_name" ]; then
+            api_name=$repo
+          fi
+          echo "$(cat /tmp/openapi-specs.json)" > "docs/specs/$api_name.json"
+          git add "docs/specs/$api_name.json"
           # Only commit and push if we have changes
-          git diff --quiet && git diff --staged --quiet || (git commit -m "Update spec for $repo#${GITHUB_SHA:7}"; git push --set-upstream upstream master)
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update spec for $api_name#${GITHUB_SHA:7}"; git push --set-upstream upstream master)
